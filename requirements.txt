@@ -1,0 +1,10 @@
+# Core runtime + UI + voice (Google Web Speech backend). See pyproject.toml for extras.
+spacy>=3.7,<4.0
+rich>=13.0
+python-dotenv>=1.0
+streamlit>=1.39
+pandas>=2.0
+SpeechRecognition>=3.10
+pydub>=0.25
+# After installing, download the spaCy model:
+#   python -m spacy download en_core_web_sm

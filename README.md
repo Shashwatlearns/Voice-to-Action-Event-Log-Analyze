@@ -1,93 +1,195 @@
 # Voice-to-Action Event Log Analyzer
 
+An NLP tool that turns spoken or typed live-event updates into an actionable task table.
 
+> "Rahul needs a VGA cable by 4 PM" -> **Rahul** | **VGA cable** | **16:00** | av_equipment | medium
 
-## Getting started
+During live events, logistics requests fly around over radios, WhatsApp and shouted hallway conversations, and
+things get missed. This tool uses **Named Entity Recognition** (spaCy) plus deterministic rules to extract
+**who** needs **what**, **how many**, **where** and **by when**, then tracks it all on a live task board with
+overdue / due-soon highlighting and CSV export.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Features
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- **NER parsing** with spaCy + a domain `EntityRuler` (200+ event items and locations such as `VGA cable`,
+  `lapel mic`, `Hall B`, `registration desk`) and dependency-parse fallbacks for unknown items.
+- **Deadline resolution** for `by 4 PM`, `at 16:30`, `before noon`, `in 20 minutes`, `tomorrow 9am`,
+  `by end of day`, `asap`, with reference-time anchoring so results are reproducible.
+- **Extracted fields**: person, item, quantity (digits and words), location, deadline, action verb, priority
+  (urgent words or tight deadlines), category (AV, furniture, catering, personnel, power, signage, ...),
+  status (`pending` / `in_progress` / `done` inferred from phrases like "is delivered"), confidence score.
+- **Voice input**: microphone recording or audio upload via `SpeechRecognition` (Google Web Speech) or offline
+  Whisper backends. Typed input always works without audio dependencies.
+- **Streamlit task board**: editable table, filters, overdue / due-soon flags, entity highlighting, per-person
+  and per-category charts, CSV / JSON export, SQLite persistence.
+- **CLI** (`vta`) for scripting and batch files, **tests**, **GitLab CI**, **Dockerfile**.
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/shashwat-group9823837/voice-to-action-event-log-analyzer.git
-git branch -M main
-git push -uf origin main
+            +-----------------+       +------------------------+
+ voice ---> | voice.py        | text  | parser.py              |
+ (mic/file) | SpeechRecogn. / | ----> |  normalise             |       +-------------+
+            | Whisper         |       |  deadline.py (regex)   | Task  | storage.py  | CSV/JSON
+ typed ---------------------------->  |  spaCy EntityRuler+NER | ----> | SQLite      | ------->
+                                      |  dependency heuristics |       +------+------+
+                                      |  priority/category     |              |
+                                      +------------------------+       +------v------+
+                                                                       | app.py (UI) |
+                                                                       | cli.py      |
+                                                                       +-------------+
 ```
 
-## Integrate with your tools
+| Module | Responsibility |
+| --- | --- |
+| `src/voice_to_action/parser.py` | `EventLogParser`: orchestrates NER, dependency heuristics and classifiers |
+| `src/voice_to_action/deadline.py` | Deterministic deadline phrase extraction and resolution |
+| `src/voice_to_action/patterns.py` | Domain vocabulary: items, locations, categories, verbs, priority regexes |
+| `src/voice_to_action/models.py` | `Task` dataclass, due-state logic, (de)serialisation |
+| `src/voice_to_action/storage.py` | `TaskStore`: SQLite CRUD, filters, CSV / JSON export |
+| `src/voice_to_action/voice.py` | Speech-to-text backends (all optional) |
+| `src/voice_to_action/cli.py` | `vta` command line interface |
+| `app.py` | Streamlit UI |
 
-* [Set up project integrations](https://gitlab.com/shashwat-group9823837/voice-to-action-event-log-analyzer/-/settings/integrations)
+## Setup
 
-## Collaborate with your team
+Requires Python 3.10+.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+```bash
+python -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-## Test and Deploy
+# core + UI + voice (Google Web Speech backend)
+pip install -e ".[ui,voice,dev]"
+python -m spacy download en_core_web_sm
 
-Use the built-in continuous integration in GitLab.
+cp .env.example .env                 # optional: tweak paths / backends
+```
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Optional extras:
 
-***
+| Extra | Adds | Notes |
+| --- | --- | --- |
+| `voice` | `SpeechRecognition`, `pydub` | Google Web Speech backend (online). Install **ffmpeg** to accept mp3/m4a/ogg uploads. |
+| `whisper` | `faster-whisper` | Offline `faster-whisper` backend, no API calls |
+| `mic` | `PyAudio` | Needed only for the CLI `--listen` microphone mode (the Streamlit recorder works in-browser) |
 
-# Editing this README
+For the `whisper` backend via SpeechRecognition install `openai-whisper` manually.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Run the Streamlit app
 
-## Suggestions for a good README
+```bash
+streamlit run app.py
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. **Log updates**: record with the in-browser microphone, upload audio, or type one update per line
+   (click *Load sample updates* to try it). Press **Parse & add to board**.
+2. **Task board**: edit any cell inline, change status, tick *Delete?*, then **Apply changes**. Export CSV / JSON.
+3. **Insights**: next deadlines, load per person and per category, priority mix.
 
-## Name
-Choose a self-explaining name for your project.
+The sidebar lets you set the **reference time** (useful when replaying a log), the *due soon* window, the
+speech backend and board filters. Tasks persist in `data/tasks.db` (`VTA_DB_PATH`).
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## CLI usage
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+# parse inline updates
+vta "Rahul needs a VGA cable by 4 PM" "Priya wants 20 chairs in Hall B before 6:30"
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+# batch file -> CSV / JSON, anchored to a fixed reference time
+vta --file examples/sample_updates.txt --ref "2026-09-11 14:00" --csv tasks.csv --json tasks.json
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# transcribe an audio file, persist to the shared task board used by the UI
+vta --audio update.wav --backend google --save
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# listen on the microphone (needs the `mic` extra)
+vta --listen --backend faster-whisper
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# pipe input
+cat updates.txt | vta
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+`python -m voice_to_action ...` is equivalent to `vta ...`.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Example output:
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```
+                                   Actionable tasks
+ Person  Item             Qty  Location           Deadline      Priority  Category       Status   Conf
+ Rahul   VGA cable        -    -                  11 Sep 16:00  medium    av_equipment   pending  0.90
+ Priya   chairs           20   Hall B             11 Sep 18:30  medium    furniture      pending  1.00
+ -       projector        -    main stage         11 Sep 12:00  medium    av_equipment   pending  0.80
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Python API
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```python
+from datetime import datetime
+from voice_to_action import EventLogParser, TaskStore
+
+parser = EventLogParser()
+task = parser.parse("Rahul needs a VGA cable by 4 PM", reference_time=datetime(2026, 9, 11, 14, 0))
+print(task.person, task.item, task.deadline, task.category)   # Rahul VGA cable 2026-09-11 16:00:00 av_equipment
+
+store = TaskStore("data/tasks.db")
+store.add(task)
+print(store.export_csv())
+```
+
+## Voice backend configuration
+
+| `VTA_VOICE_BACKEND` | Requirements | Online? |
+| --- | --- | --- |
+| `google` (default) | `voice` extra | yes (free Google Web Speech endpoint) |
+| `whisper` | `voice` extra + `pip install openai-whisper` | no |
+| `faster-whisper` | `whisper` extra | no |
+
+Set `VTA_WHISPER_MODEL` (`tiny`, `base`, `small`, ...) to trade accuracy for speed on the Whisper backends.
+
+## How parsing works
+
+1. **Normalise** whitespace and quotes.
+2. **Deadline** phrase is located with regexes (`deadline.py`) and resolved against the reference time.
+   Bare hours (`by 4`) are disambiguated to the next plausible occurrence; `asap` becomes *now + 15 min* and
+   forces high priority.
+3. **spaCy pipeline**: an `EntityRuler` (labels `ITEM`, `LOCATION`) runs *before* the statistical NER so domain
+   terms win; NER still supplies `PERSON`, `TIME`, `CARDINAL`, `FAC`, ...
+4. **Heuristics** fill gaps: subject of the request verb -> person; object of the verb -> item; number directly
+   before the item -> quantity; `for the projector` is treated as a beneficiary, not the item.
+5. **Classifiers**: keyword categories, priority from urgency words or time-to-deadline, status from phrases
+   such as "is delivered" or "working on it".
+6. A **confidence** score (0-1) reflects how many of person / item / deadline / location were found.
+
+Extend the vocabulary by editing `ITEM_PHRASES`, `LOCATION_PHRASES` and `CATEGORY_KEYWORDS` in
+`src/voice_to_action/patterns.py`.
+
+## Tests and linting
+
+```bash
+pytest                      # parser tests skip automatically if the spaCy model is missing
+VTA_REQUIRE_MODEL=1 pytest  # fail instead of skip (used in CI)
+ruff check .
+```
+
+The GitLab pipeline runs `ruff`, `pytest` with coverage and JUnit reports, and builds the Docker image on the
+default branch.
+
+## Docker
+
+```bash
+docker build -t voice-to-action .
+docker run -p 8501:8501 -v $(pwd)/data:/data voice-to-action
+```
+
+Open http://localhost:8501.
+
+## Roadmap ideas
+
+- Multi-item updates split into separate tasks ("a projector and 2 mics")
+- Assignee vs requester distinction ("ask Rahul to bring...")
+- Push notifications / Slack webhook for overdue tasks
+- Fine-tuned NER model trained on real event logs
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT

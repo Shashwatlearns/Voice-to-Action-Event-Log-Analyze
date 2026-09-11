@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+report.xml
+htmlcov/
+.cache/
+
+# App data
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Audio temp files
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+!examples/**/*.wav
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
