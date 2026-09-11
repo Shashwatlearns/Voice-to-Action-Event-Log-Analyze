@@ -23,6 +23,7 @@ from voice_to_action.deadline import extract_deadline
         ("tonight at 8", datetime(2026, 9, 11, 20, 0)),
         ("tomorrow by 4", datetime(2026, 9, 12, 16, 0)),
         ("coffee in the lobby at 11", datetime(2026, 9, 12, 11, 0)),
+        ("chairs by 12", datetime(2026, 9, 11, 12, 0)),
     ],
 )
 def test_deadline_resolution(text: str, expected: datetime, ref: datetime) -> None:
@@ -51,6 +52,13 @@ def test_deadline_text_and_span(ref: datetime) -> None:
     assert match is not None
     assert match.text == "by 4 PM"
     assert text[match.start : match.end] == "by 4 PM"
+
+
+def test_past_evening_hour_rolls_to_next_morning() -> None:
+    late_ref = datetime(2026, 9, 11, 21, 0)
+    match = extract_deadline("badges at the desk by 8", late_ref)
+    assert match is not None
+    assert match.when == datetime(2026, 9, 12, 8, 0)
 
 
 def test_bare_tomorrow_defaults_to_end_of_day(ref: datetime) -> None:

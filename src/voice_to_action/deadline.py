@@ -46,6 +46,8 @@ _ALLOWED_FOLLOWERS = frozenset({
     "as", "on", "with", "pls", "plz", "thanks", "thank", "itself",
 })
 _ASAP_MINUTES = 15
+# Latest hour (24h) a bare "by 8" style time may be resolved to before we assume the next morning
+_LATEST_EVENING_HOUR = 22
 
 
 @dataclass(frozen=True)
@@ -86,23 +88,26 @@ def _day_info(day_word: str | None) -> tuple[int, str | None]:
 
 def _disambiguate_hour(
     hour: int, minute: int, base: datetime, reference: datetime, has_day: bool, hint: str | None
-) -> int:
-    """Resolve a 1-12 hour without AM/PM into a 24h hour."""
+) -> tuple[int, int]:
+    """Resolve a 1-12 hour without AM/PM. Returns ``(hour_24, extra_days)``."""
     if hour > 12:
-        return hour
+        return hour, 0
     if hint == "am":
-        return 0 if hour == 12 else hour
+        return (0 if hour == 12 else hour), 0
     if hint == "pm":
-        return 12 if hour == 12 else hour + 12
+        return (12 if hour == 12 else hour + 12), 0
     if has_day:
         # "tomorrow by 4" almost always means the afternoon; 7-12 stay in the morning.
-        return hour if 7 <= hour <= 12 else hour + 12
-    cand_am = hour % 12
-    cand_pm = cand_am + 12
-    for candidate in (cand_am, cand_pm):
-        if base.replace(hour=candidate, minute=minute) >= reference:
-            return candidate
-    return cand_pm
+        return (hour if 7 <= hour <= 12 else hour + 12), 0
+    if hour == 12:
+        return 12, 0  # "by 12" is noon, even if already past
+    cand_am, cand_pm = hour, hour + 12
+    if base.replace(hour=cand_am, minute=minute) >= reference:
+        return cand_am, 0
+    if cand_pm <= _LATEST_EVENING_HOUR and base.replace(hour=cand_pm, minute=minute) >= reference:
+        return cand_pm, 0
+    # Both today's candidates are past (or the PM one is late night): assume tomorrow morning.
+    return cand_am, 1
 
 
 def _relative_amount(raw: str) -> float:
@@ -164,14 +169,15 @@ def extract_deadline(
         hour = int(m.group("hour"))
         minute = int(m.group("minute") or 0)
         ampm = m.group("ampm")
+        extra_days = 0
         if ampm:
             ampm = ampm.lower().replace(".", "")
             hour = hour % 12
             if ampm == "pm":
                 hour += 12
         else:
-            hour = _disambiguate_hour(hour, minute, base, reference, day_match is not None, hint)
-        when = base.replace(hour=hour % 24, minute=minute)
+            hour, extra_days = _disambiguate_hour(hour, minute, base, reference, day_match is not None, hint)
+        when = (base + timedelta(days=extra_days)).replace(hour=hour % 24, minute=minute)
         label, spans = _combine_text(text, m, day_match)
         return DeadlineMatch(when, label, m.start(), m.end(), "clock", spans)
 
