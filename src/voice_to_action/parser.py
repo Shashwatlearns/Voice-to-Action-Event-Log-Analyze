@@ -39,7 +39,9 @@ CharSpans = list[tuple[int, int]]
 
 SPACY_LOCATION_LABELS = frozenset({"FAC", "GPE", "LOC"})
 NON_ITEM_LABELS = frozenset({"PERSON", "TIME", "DATE", "LOCATION", "FAC", "GPE", "LOC", "CARDINAL", "ORDINAL"})
-LOCATION_PREPOSITIONS = frozenset({"in", "at", "to", "near", "inside", "outside", "behind", "beside", "on", "from", "towards"})
+LOCATION_PREPOSITIONS = frozenset(
+    {"in", "at", "to", "near", "inside", "outside", "behind", "beside", "on", "from", "towards"}
+)
 PERSON_PREPOSITIONS = frozenset({"for", "from", "with", "to"})
 PERSON_REQUEST_VERBS = frozenset({"ask", "tell", "remind", "inform", "notify", "call", "ping", "message"})
 BENEFICIARY_PREPOSITIONS = frozenset({"for", "to"})
@@ -88,9 +90,14 @@ def _span_blocked(span: Span, spans: CharSpans) -> bool:
     return _overlaps(span.start_char, span.end_char, spans)
 
 
+def _is_filler(word: str) -> bool:
+    lowered = word.lower()
+    return lowered.strip(",.") in STRIP_LEADING_WORDS or lowered in NUMBER_WORDS or word.isdigit()
+
+
 def _clean_item(text: str) -> str | None:
     words = text.split()
-    while words and (words[0].lower().strip(",.") in STRIP_LEADING_WORDS or words[0].lower() in NUMBER_WORDS or words[0].isdigit()):
+    while words and _is_filler(words[0]):
         words.pop(0)
     cleaned = " ".join(words).strip(" ,.;:!?-")
     return cleaned or None
@@ -214,11 +221,15 @@ class EventLogParser:
             return False
         return tok.lower_ not in PERSON_STOPWORDS
 
+    @staticmethod
+    def _is_name_part(candidate: Token, head: Token, deps: set[str]) -> bool:
+        return candidate.pos_ == "PROPN" and candidate.dep_ in deps and candidate.head == head
+
     def _name_span(self, doc: Doc, tok: Token) -> Span:
         start, end = tok.i, tok.i + 1
-        while start > 0 and doc[start - 1].pos_ == "PROPN" and doc[start - 1].dep_ == "compound" and doc[start - 1].head == tok:
+        while start > 0 and self._is_name_part(doc[start - 1], tok, {"compound"}):
             start -= 1
-        while end < len(doc) and doc[end].pos_ == "PROPN" and doc[end].dep_ in {"flat", "compound"} and doc[end].head == tok:
+        while end < len(doc) and self._is_name_part(doc[end], tok, {"flat", "compound"}):
             end += 1
         return doc[start:end]
 
@@ -272,7 +283,8 @@ class EventLogParser:
                 continue
             if _span_blocked(chunk, blocked):
                 continue
-            if root.dep_ == "nsubj" and root.head.pos_ == "VERB" and any(c.dep_ in {"dobj", "obj"} for c in root.head.children):
+            is_subject = root.dep_ == "nsubj" and root.head.pos_ == "VERB"
+            if is_subject and any(c.dep_ in {"dobj", "obj"} for c in root.head.children):
                 continue  # subject of a transitive verb is the requester, not the item
             return self._bounded_span(doc, root, blocked, exclude)
         return None
@@ -333,7 +345,9 @@ class EventLogParser:
         return "medium"
 
     @staticmethod
-    def _confidence(person: str | None, item: str | None, deadline: DeadlineMatch | None, location: str | None) -> float:
+    def _confidence(
+        person: str | None, item: str | None, deadline: DeadlineMatch | None, location: str | None
+    ) -> float:
         score = 0.1
         score += 0.4 if item else 0.0
         score += 0.2 if person else 0.0

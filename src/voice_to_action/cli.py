@@ -25,12 +25,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     source.add_argument("-a", "--audio", type=Path, help="audio file to transcribe (wav/mp3/m4a/flac)")
     source.add_argument("-l", "--listen", action="store_true", help="record one phrase from the microphone")
 
-    parser.add_argument("--backend", choices=VOICE_BACKENDS, default=config.VOICE_BACKEND, help="speech-to-text backend")
+    parser.add_argument(
+        "--backend", choices=VOICE_BACKENDS, default=config.VOICE_BACKEND, help="speech-to-text backend"
+    )
     parser.add_argument("--ref", help="reference time for relative deadlines, e.g. '2026-09-11 14:00' (default: now)")
     parser.add_argument("--csv", type=Path, help="write parsed tasks to this CSV file")
     parser.add_argument("--json", type=Path, help="write parsed tasks to this JSON file")
     parser.add_argument("--save", action="store_true", help="persist tasks to the SQLite task board")
-    parser.add_argument("--db", default=config.DB_PATH, help=f"SQLite path used with --save (default: {config.DB_PATH})")
+    parser.add_argument(
+        "--db", default=config.DB_PATH, help=f"SQLite path used with --save (default: {config.DB_PATH})"
+    )
     parser.add_argument("--model", default=config.SPACY_MODEL, help="spaCy model name")
     return parser
 

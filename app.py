@@ -32,7 +32,10 @@ DUE_LABELS = {
     "none": "\u26aa No deadline",
 }
 CATEGORIES = [*CATEGORY_KEYWORDS.keys(), "other"]
-BOARD_COLUMNS = ["id", "Due", "Person", "Item", "Qty", "Location", "Deadline", "Priority", "Category", "Status", "Confidence", "Raw", "Delete"]
+BOARD_COLUMNS = [
+    "id", "Due", "Person", "Item", "Qty", "Location", "Deadline", "Priority", "Category", "Status",
+    "Confidence", "Raw", "Delete",
+]
 SAMPLE_FILE = Path(__file__).resolve().parent / "examples" / "sample_updates.txt"
 
 
@@ -90,7 +93,10 @@ def persist_edits(store: TaskStore, edited: pd.DataFrame) -> tuple[int, int]:
             store.delete(task.id)
             deleted += 1
             continue
-        deadline = None if pd.isna(row["Deadline"]) else pd.Timestamp(row["Deadline"]).to_pydatetime().replace(tzinfo=None)
+        raw_deadline = row["Deadline"]
+        deadline = None
+        if not pd.isna(raw_deadline):
+            deadline = pd.Timestamp(raw_deadline).to_pydatetime().replace(tzinfo=None)
         quantity = None if pd.isna(row["Qty"]) else int(row["Qty"])
         changes = {
             "person": _clean_str(row["Person"]),
@@ -115,7 +121,11 @@ with st.sidebar:
     st.caption("Event Log Analyzer")
 
     st.subheader("Reference time")
-    use_now = st.toggle("Use current time", value=True, help="Relative deadlines like 'in 20 minutes' are resolved against this.")
+    use_now = st.toggle(
+        "Use current time",
+        value=True,
+        help="Relative deadlines like 'in 20 minutes' are resolved against this.",
+    )
     if use_now:
         reference_time = datetime.now()
     else:
@@ -125,7 +135,8 @@ with st.sidebar:
     soon_minutes = st.slider("'Due soon' window (minutes)", 5, 120, config.DUE_SOON_MINUTES, step=5)
 
     st.subheader("Voice")
-    backend = st.selectbox("Speech-to-text backend", VOICE_BACKENDS, index=VOICE_BACKENDS.index(config.VOICE_BACKEND) if config.VOICE_BACKEND in VOICE_BACKENDS else 0)
+    default_backend = VOICE_BACKENDS.index(config.VOICE_BACKEND) if config.VOICE_BACKEND in VOICE_BACKENDS else 0
+    backend = st.selectbox("Speech-to-text backend", VOICE_BACKENDS, index=default_backend)
 
     st.subheader("Board filters")
     status_filter = st.multiselect("Status", STATUSES, default=list(STATUSES))
@@ -185,7 +196,9 @@ with tab_log:
             placeholder="Rahul needs a VGA cable by 4 PM\nPriya wants 20 chairs in Hall B before 6:30",
         )
         parse_col, clear_col = st.columns([1, 1])
-        parse_clicked = parse_col.button("Parse & add to board", type="primary", use_container_width=True, disabled=not update_text.strip())
+        parse_clicked = parse_col.button(
+            "Parse & add to board", type="primary", use_container_width=True, disabled=not update_text.strip()
+        )
         if clear_col.button("Clear text", use_container_width=True):
             st.session_state["update_text"] = ""
             st.rerun()
@@ -212,7 +225,12 @@ with tab_log:
 
 # -------------------------------------------------------------------------- tab: board
 with tab_board:
-    tasks = store.list_tasks(status=status_filter or None, priority=priority_filter or None, category=category_filter or None, person=person_filter or None)
+    tasks = store.list_tasks(
+        status=status_filter or None,
+        priority=priority_filter or None,
+        category=category_filter or None,
+        person=person_filter or None,
+    )
     board = tasks_to_frame(tasks, reference_time, soon_minutes)
 
     overdue = sum(t.due_state(reference_time, soon_minutes) == "overdue" for t in tasks)
@@ -241,7 +259,9 @@ with tab_board:
                 "Priority": st.column_config.SelectboxColumn("Priority", options=list(PRIORITIES), width="small"),
                 "Category": st.column_config.SelectboxColumn("Category", options=CATEGORIES),
                 "Status": st.column_config.SelectboxColumn("Status", options=list(STATUSES), width="small"),
-                "Confidence": st.column_config.ProgressColumn("Conf.", min_value=0.0, max_value=1.0, format="%.2f", width="small"),
+                "Confidence": st.column_config.ProgressColumn(
+                    "Conf.", min_value=0.0, max_value=1.0, format="%.2f", width="small"
+                ),
                 "Raw": st.column_config.TextColumn("Original update", width="large"),
                 "Delete": st.column_config.CheckboxColumn("Delete?", width="small"),
             },
@@ -288,12 +308,18 @@ with tab_insights:
                 qty = f"{int(row['Qty'])}x " if pd.notna(row["Qty"]) else ""
                 where = f" @ {row['Location']}" if row["Location"] else ""
                 who = row["Person"] or "unassigned"
-                st.markdown(f"- {row['Due']} **{row['Deadline']:%H:%M}** {qty}{row['Item'] or '?'}{where} ({who}, {row['Priority']})")
+                line = f"- {row['Due']} **{row['Deadline']:%H:%M}** {qty}{row['Item'] or '?'}{where}"
+                st.markdown(f"{line} ({who}, {row['Priority']})")
 
         c1, c2 = st.columns(2)
         with c1:
             st.subheader("Open tasks per person")
-            per_person = open_frame.assign(Person=open_frame["Person"].replace("", "unassigned")).groupby("Person").size().sort_values(ascending=False)
+            per_person = (
+                open_frame.assign(Person=open_frame["Person"].replace("", "unassigned"))
+                .groupby("Person")
+                .size()
+                .sort_values(ascending=False)
+            )
             st.bar_chart(per_person)
         with c2:
             st.subheader("Open tasks per category")

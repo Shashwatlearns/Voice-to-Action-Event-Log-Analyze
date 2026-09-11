@@ -136,7 +136,8 @@ HIGH_PRIORITY_RE = re.compile(
     re.IGNORECASE,
 )
 LOW_PRIORITY_RE = re.compile(
-    r"\b(whenever|no rush|no hurry|low priority|when (?:you|she|he|they) (?:get|gets|have|has) (?:a|the) (?:chance|time)|"
+    r"\b(whenever|no rush|no hurry|low priority|"
+    r"when (?:you|she|he|they) (?:get|gets|have|has) (?:a|the) (?:chance|time)|"
     r"when free|eventually|sometime|not urgent|nice to have|if possible)\b",
     re.IGNORECASE,
 )
@@ -176,7 +177,8 @@ def build_entity_patterns() -> list[dict[str, Any]]:
     identifier = {"TEXT": {"REGEX": r"^(?:[A-Z]|\d{1,3}[A-Za-z]?)$"}}
     for word in NUMBERED_LOCATION_WORDS:
         patterns.append({"label": "LOCATION", "pattern": [{"LOWER": word}, identifier]})
-        patterns.append({"label": "LOCATION", "pattern": [{"LOWER": word}, {"LOWER": "no"}, {"IS_PUNCT": True, "OP": "?"}, identifier]})
+        numbered = [{"LOWER": word}, {"LOWER": "no"}, {"IS_PUNCT": True, "OP": "?"}, identifier]
+        patterns.append({"label": "LOCATION", "pattern": numbered})
     return patterns
 
 

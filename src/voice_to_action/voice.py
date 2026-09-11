@@ -66,7 +66,8 @@ def _ensure_wav(path: str) -> str:
         from pydub import AudioSegment
     except ImportError as exc:
         raise VoiceUnavailableError(
-            f"Cannot read '{Path(path).suffix}' audio without pydub + ffmpeg. Upload a WAV file or install the 'voice' extra."
+            f"Cannot read '{Path(path).suffix}' audio without pydub + ffmpeg. "
+            "Upload a WAV file or install the 'voice' extra."
         ) from exc
     wav_path = f"{path}.converted.wav"
     try:
@@ -92,10 +93,13 @@ def _recognize(recognizer, audio, backend: str, language: str, whisper_model: st
     sr = _require_sr()
     try:
         if backend == "whisper":
-            return str(recognizer.recognize_whisper(audio, model=whisper_model, language=language.split("-")[0])).strip()
+            lang = language.split("-")[0]
+            return str(recognizer.recognize_whisper(audio, model=whisper_model, language=lang)).strip()
         return str(recognizer.recognize_google(audio, language=language)).strip()
     except sr.UnknownValueError as exc:
-        raise VoiceUnavailableError("Could not understand the audio. Try speaking closer to the mic or re-recording.") from exc
+        raise VoiceUnavailableError(
+            "Could not understand the audio. Try speaking closer to the mic or re-recording."
+        ) from exc
     except sr.RequestError as exc:
         raise VoiceUnavailableError(f"Speech service error: {exc}") from exc
     except ImportError as exc:
@@ -151,7 +155,8 @@ def transcribe_microphone(
             audio = recognizer.listen(mic, timeout=timeout, phrase_time_limit=phrase_time_limit)
     except (OSError, AttributeError) as exc:
         raise VoiceUnavailableError(
-            "Microphone access failed. Install PyAudio (pip install 'voice-to-action[mic]') and check your input device."
+            "Microphone access failed. Install PyAudio (pip install 'voice-to-action[mic]') "
+            "and check your input device."
         ) from exc
     except sr.WaitTimeoutError as exc:
         raise VoiceUnavailableError("No speech detected before the timeout.") from exc

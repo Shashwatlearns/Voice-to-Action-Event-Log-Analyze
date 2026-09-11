@@ -30,7 +30,8 @@ CLOCK_RE = re.compile(
     re.IGNORECASE,
 )
 NAMED_RE = re.compile(
-    rf"(?:\b{TRIGGER}\s+(?:the\s+)?)?\b(?P<word>noon|midday|midnight|eod|end of (?:the )?day|close of play|lunchtime|lunch time)\b",
+    rf"(?:\b{TRIGGER}\s+(?:the\s+)?)?"
+    r"\b(?P<word>noon|midday|midnight|eod|end of (?:the )?day|close of play|lunchtime|lunch time)\b",
     re.IGNORECASE,
 )
 ASAP_RE = re.compile(
@@ -83,7 +84,9 @@ def _day_info(day_word: str | None) -> tuple[int, str | None]:
     return 0, None
 
 
-def _disambiguate_hour(hour: int, minute: int, base: datetime, reference: datetime, has_day: bool, hint: str | None) -> int:
+def _disambiguate_hour(
+    hour: int, minute: int, base: datetime, reference: datetime, has_day: bool, hint: str | None
+) -> int:
     """Resolve a 1-12 hour without AM/PM into a 24h hour."""
     if hour > 12:
         return hour
@@ -109,7 +112,9 @@ def _relative_amount(raw: str) -> float:
     return {"half an": 0.5, "a": 1.0, "an": 1.0, "a couple of": 2.0, "a few": 3.0, "few": 3.0}.get(raw, 1.0)
 
 
-def _combine_text(text: str, primary: re.Match[str], day: re.Match[str] | None) -> tuple[str, tuple[tuple[int, int], ...]]:
+def _combine_text(
+    text: str, primary: re.Match[str], day: re.Match[str] | None
+) -> tuple[str, tuple[tuple[int, int], ...]]:
     spans: list[tuple[int, int]] = [(primary.start(), primary.end())]
     label = primary.group(0).strip()
     if day is not None:
@@ -142,7 +147,8 @@ def extract_deadline(
         unit = rel.group("unit").lower()
         delta = timedelta(hours=amount) if unit.startswith("h") else timedelta(minutes=amount)
         when = _floor_minute(reference + delta)
-        return DeadlineMatch(when, rel.group(0).strip(), rel.start(), rel.end(), "relative", ((rel.start(), rel.end()),))
+        span = (rel.start(), rel.end())
+        return DeadlineMatch(when, rel.group(0).strip(), rel.start(), rel.end(), "relative", (span,))
 
     # 2. clock time: "by 4 PM", "at 16:30", "before 6.30", "by 4"
     for m in CLOCK_RE.finditer(text):
@@ -193,7 +199,6 @@ def extract_deadline(
     # 5. a bare day word ("tomorrow") without a time -> default to end of that day
     if day_match and day_offset > 0:
         when = base.replace(hour=eod_hour, minute=0)
-        return DeadlineMatch(
-            when, day_match.group(0), day_match.start(), day_match.end(), "named", ((day_match.start(), day_match.end()),)
-        )
+        span = (day_match.start(), day_match.end())
+        return DeadlineMatch(when, day_match.group(0), day_match.start(), day_match.end(), "named", (span,))
     return None
